@@ -9,31 +9,82 @@ const router = new Hono();
 
 // GET all tasks - NO BUG HERE
 router.get("/tasks", async (c) => {
-  const { priority, category } = c.req.query();
-  let query = "SELECT * FROM tasks";
-  const params = [];
-  const conditions = [];
+  const {
+    priority,
+    category,
+    completed,
+    search,
+    page: rawPage,
+    limit: rawLimit,
+    sortBy: rawSortBy,
+    sortOrder: rawSortOrder,
+  } = c.req.query();
+
+  const page = Math.max(parseInt(rawPage || "1", 10) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(rawLimit || "10", 10) || 10, 1), 100);
+  const offset = (page - 1) * limit;
+
+  const allowedSortBy = new Set(["title", "priority", "due_date"]);
+  const sortBy = allowedSortBy.has((rawSortBy || "").toLowerCase())
+    ? (rawSortBy as string)
+    : "due_date";
+  const sortOrder = (rawSortOrder || "desc").toLowerCase() === "asc" ? "ASC" : "DESC";
+
+  const whereConditions: string[] = [];
+  const whereParams: (string | number)[] = [];
 
   if (priority) {
-    conditions.push("priority = ?");
-    params.push(priority);
+    whereConditions.push("priority = ?");
+    whereParams.push(priority);
   }
   if (category) {
-    conditions.push("category = ?");
-    params.push(category);
+    whereConditions.push("category = ?");
+    whereParams.push(category);
+  }
+  if (typeof completed !== "undefined") {
+    const completedBool = String(completed).toLowerCase() === "true";
+    whereConditions.push("completed = ?");
+    whereParams.push(completedBool ? 1 : 0);
+  }
+  if (search) {
+    whereConditions.push("(title LIKE ? OR description LIKE ?)");
+    const term = `%${search}%`;
+    whereParams.push(term, term);
   }
 
-  if (conditions.length > 0) {
-    query += " WHERE " + conditions.join(" AND ");
+  let whereClause = "";
+  if (whereConditions.length > 0) {
+    whereClause = " WHERE " + whereConditions.join(" AND ");
   }
 
-  query += " ORDER BY created_at DESC";
-
-  const tasks = await client.execute({
-    sql: query,
-    args: params,
+  // Total count for pagination
+  const countResult = await client.execute({
+    sql: `SELECT COUNT(*) as count FROM tasks${whereClause}`,
+    args: whereParams,
   });
-  return c.json(tasks.rows);
+  const totalItems = Number((countResult.rows?.[0] as any)?.count || 0);
+  const totalPages = Math.max(Math.ceil(totalItems / limit), 1);
+
+  // Data query with sorting and pagination
+  const dataSql = `SELECT * FROM tasks${whereClause} ORDER BY ${sortBy} ${sortOrder} LIMIT ? OFFSET ?`;
+  const dataArgs = [...whereParams, limit, offset];
+
+  const dataResult = await client.execute({
+    sql: dataSql,
+    args: dataArgs,
+  });
+
+  return c.json({
+    data: dataResult.rows,
+    pagination: {
+      currentPage: page,
+      totalPages,
+      totalItems,
+      itemsPerPage: limit,
+      hasNextPage: page < totalPages,
+      hasPreviousPage: page > 1,
+    },
+  });
 });
 
 router.post("/tasks", async (c) => {

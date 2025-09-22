@@ -1,5 +1,5 @@
 import type { Task } from "@/api/tasks";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 interface TaskStatsProps {
   tasks: Task[];
@@ -8,16 +8,18 @@ interface TaskStatsProps {
 function TaskStats({ tasks }: TaskStatsProps) {
   const [updateTime, setUpdateTime] = useState<number>(Date.now());
 
-  const stats = {
-    total: tasks.length,
-    completed: tasks.filter((t: Task) => t.completed).length,
-    pending: tasks.filter((t: Task) => !t.completed).length,
-    highPriority: tasks.filter((t: Task) => t.priority === "high").length,
-    mediumPriority: tasks.filter((t: Task) => t.priority === "medium").length,
-    lowPriority: tasks.filter((t: Task) => t.priority === "low").length,
-    overdueCount: calculateOverdueTasks(tasks),
-    averageCompletionTime: calculateAverageCompletionTime(tasks),
-  };
+  const stats = useMemo(() => {
+    return {
+      total: tasks.length,
+      completed: tasks.filter((t: Task) => t.completed).length,
+      pending: tasks.filter((t: Task) => !t.completed).length,
+      highPriority: tasks.filter((t: Task) => t.priority === "high").length,
+      mediumPriority: tasks.filter((t: Task) => t.priority === "medium").length,
+      lowPriority: tasks.filter((t: Task) => t.priority === "low").length,
+      overdueCount: calculateOverdueTasks(tasks),
+      averageCompletionTime: calculateAverageCompletionTime(tasks),
+    };
+  }, [tasks]);
 
   function calculateOverdueTasks(taskList: Task[]): number {
     console.log("🔥 Calculating overdue tasks..."); // This will log too frequently
@@ -46,9 +48,10 @@ function TaskStats({ tasks }: TaskStatsProps) {
   }
 
   useEffect(() => {
-    const timer = setInterval(() => {
+    const timer = window.setInterval(() => {
       setUpdateTime(Date.now());
     }, 1000);
+    return () => window.clearInterval(timer);
   }, []);
 
   return (

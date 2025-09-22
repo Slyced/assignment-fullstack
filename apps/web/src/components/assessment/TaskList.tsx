@@ -1,6 +1,6 @@
 import type { Priority, Task } from "@/api/tasks";
 import { deleteTask } from "@/api/tasks";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 interface TaskListProps {
   tasks: Task[];
@@ -18,15 +18,9 @@ function TaskList({
   const [sortBy, setSortBy] = useState<"date" | "priority" | "title">("date");
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
 
-  const filteredAndSortedTasks: Task[] = tasks
-    .filter(
-      (task) =>
-        task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (task.description &&
-          task.description.toLowerCase().includes(searchTerm.toLowerCase()))
-    )
-    .sort((a, b) => {
-      console.log("🔥 Expensive sort operation running!"); // This will log too frequently
+  const sortedTasks: Task[] = useMemo(() => {
+    return [...tasks].sort((a, b) => {
+      console.log("🔥 Expensive sort operation running!");
       if (sortBy === "date") {
         return (
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -38,6 +32,16 @@ function TaskList({
       }
       return a.title.localeCompare(b.title);
     });
+  }, [tasks, sortBy]);
+
+  const filteredTasks: Task[] = useMemo(() => {
+    const needle = searchTerm.toLowerCase();
+    return sortedTasks.filter(
+      (task) =>
+        task.title.toLowerCase().includes(needle) ||
+        (task.description && task.description.toLowerCase().includes(needle))
+    );
+  }, [sortedTasks, searchTerm]);
 
   const handleTaskClick = (taskId: number) => {
     setSelectedTaskId(taskId);
@@ -70,12 +74,12 @@ function TaskList({
           <option value="title">Sort by Title</option>
         </select>
         <span style={{ marginLeft: "10px" }}>
-          Showing {filteredAndSortedTasks.length} of {tasks.length} tasks
+          Showing {filteredTasks.length} of {tasks.length} tasks
         </span>
       </div>
 
       <div className="task-list">
-        {filteredAndSortedTasks.map((task) => (
+        {filteredTasks.map((task) => (
           <TaskItem
             key={task.id}
             task={task}

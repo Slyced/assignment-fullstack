@@ -22,22 +22,78 @@ export type NewTask = {
   due_date?: string | null;
 };
 
+export type SortBy = "title" | "priority" | "due_date";
+export type SortOrder = "asc" | "desc";
+
 export type TaskFilters = {
   priority?: Priority;
   category?: string;
+  completed?: boolean;
+  search?: string;
+  page?: number;
+  limit?: number;
+  sortBy?: SortBy;
+  sortOrder?: SortOrder;
+};
+
+export type Pagination = {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
 };
 
 export const fetchTasks = async (
   filters: TaskFilters = {}
 ): Promise<Task[]> => {
-  const queryParams = new URLSearchParams(filters).toString();
-  const url = queryParams
-    ? `${API_URL}/tasks?${queryParams}`
+  const searchParams = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    searchParams.set(key, String(value));
+  });
+
+  const url = searchParams.toString()
+    ? `${API_URL}/tasks?${searchParams.toString()}`
     : `${API_URL}/tasks`;
 
   const response = await fetch(url);
   if (!response.ok) throw new Error("Failed to fetch tasks");
-  return response.json() as Promise<Task[]>;
+  const json = await response.json();
+  return Array.isArray(json) ? (json as Task[]) : (json.data as Task[]);
+};
+
+export const fetchTasksWithMeta = async (
+  filters: TaskFilters = {}
+): Promise<{ data: Task[]; pagination: Pagination }> => {
+  const searchParams = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    searchParams.set(key, String(value));
+  });
+
+  const url = searchParams.toString()
+    ? `${API_URL}/tasks?${searchParams.toString()}`
+    : `${API_URL}/tasks`;
+
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("Failed to fetch tasks");
+  const json = await response.json();
+  if (Array.isArray(json)) {
+    return {
+      data: json as Task[],
+      pagination: {
+        currentPage: 1,
+        totalPages: 1,
+        totalItems: (json as Task[]).length,
+        itemsPerPage: (json as Task[]).length,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+    };
+  }
+  return json as { data: Task[]; pagination: Pagination };
 };
 
 export const createTask = async (task: NewTask): Promise<Task> => {
